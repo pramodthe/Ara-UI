@@ -59,17 +59,13 @@ final class BackendClient {
 
     private static func createSession(baseURL: URL, appName: String, userId: String, sessionId: String) async throws {
         struct SessionPayload: Encodable {
-            struct State: Encodable {
-                let key1: String
-                let key2: Int
-            }
-            let state: State
+            let state: [String: String]
         }
 
         var request = URLRequest(url: baseURL.appendingPathComponent("apps/\(appName)/users/\(userId)/sessions/\(sessionId)"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let payload = SessionPayload(state: .init(key1: "value1", key2: 42))
+        let payload = SessionPayload(state: [:])
         request.httpBody = try JSONEncoder().encode(payload)
         request.timeoutInterval = 60
 
@@ -129,34 +125,12 @@ final class BackendClient {
         request.timeoutInterval = 60
         request.httpBody = try JSONEncoder().encode(payload)
 
-        if let body = request.httpBody,
-           var json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
-            if var newMessage = json["newMessage"] as? [String: Any],
-               var parts = newMessage["parts"] as? [[String: Any]] {
-                for idx in parts.indices {
-                    if var inlineData = parts[idx]["inlineData"] as? [String: Any], inlineData["data"] != nil {
-                        inlineData["data"] = "value..."
-                        parts[idx]["inlineData"] = inlineData
-                    }
-                }
-                newMessage["parts"] = parts
-                json["newMessage"] = newMessage
-            }
-
-            if let sanitizedData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]),
-               let bodyString = String(data: sanitizedData, encoding: .utf8) {
-                print("Sending request to \(request.url?.absoluteString ?? "<unknown>"):\n\(bodyString)")
-            }
-        }
-
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw NSError(domain: "BackendClient", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "Server error"])
         }
 
         let rawString = String(data: data, encoding: .utf8) ?? ""
-        print("Received response (status: \(http.statusCode)):\n\(rawString)")
-
         let payloads = extractPayloads(from: rawString)
         var textFragments: [String] = []
         var decodeError: Error?
@@ -171,7 +145,6 @@ final class BackendClient {
                 }
             } catch {
                 decodeError = error
-                print("Failed to decode backend payload: \(payload)\nError: \(error)")
             }
         }
 

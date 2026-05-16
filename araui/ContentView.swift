@@ -2,6 +2,7 @@
 //  ContentView.swift
 //  nova
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @EnvironmentObject private var vm: ChatViewModel
@@ -104,11 +105,6 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 .help("Stop speaking")
             }
-            // Button(action: { vm.captureSelection() }) {dd 
-            //     Image(systemName: "rectangle.and.text.magnifyingglass")
-            // }
-            // .buttonStyle(.plain)
-            // .help("Capture currently selected text from the frontmost app")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -249,14 +245,13 @@ private struct MessageRow: View {
 
 private struct TypingIndicator: View {
     @State private var dotCount: Int = 0
+    private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     var body: some View {
         Text("working on it" + String(repeating: ".", count: dotCount))
             .foregroundStyle(.secondary)
             .font(.body)
-            .onAppear {
-                Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-                    dotCount = (dotCount + 1) % 4
-                }
+            .onReceive(timer) { _ in
+                dotCount = (dotCount + 1) % 4
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -276,17 +271,6 @@ private struct ErrorBanner: View {
     }
 }
 
-private struct EmptyState: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Welcome to AraUI")
-                .font(.title3.weight(.semibold))
-            Text("Open Settings (⌘,) and add your Gemini API key to start chatting.")
-                .foregroundStyle(.secondary)
-        }
-        .padding(.bottom, 12)
-    }
-}
 
 private struct SpeechCaptureOverlay: View {
     let isVisible: Bool

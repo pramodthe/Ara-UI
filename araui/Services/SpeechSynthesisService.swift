@@ -12,9 +12,14 @@ import Foundation
 final class SpeechSynthesisService {
     var onSpeakingStateChanged: ((Bool) -> Void)?
     
-    private var currentProcess: Process?
+    private let lock = NSLock()
+    private var _currentProcess: Process?
+    private var currentProcess: Process? {
+        get { lock.withLock { _currentProcess } }
+        set { lock.withLock { _currentProcess = newValue } }
+    }
     private var selectedVoiceName: String?
-    private var speechRate: Int = 200 // words per minute
+    private var speechRate: Int = 200
     
     init() {
         // Don't configure any voice - use system default
@@ -110,13 +115,10 @@ final class SpeechSynthesisService {
             
             var args: [String] = []
             
-            // Add voice selection only if explicitly set
             if let voice = self.selectedVoiceName {
                 args.append(contentsOf: ["-v", voice])
             }
-            // Note: Not adding rate to use system default speed
-            
-            // Add text
+            args.append(contentsOf: ["-r", String(self.speechRate)])
             args.append(trimmed)
             
             process.arguments = args
@@ -170,16 +172,8 @@ final class SpeechSynthesisService {
         speechRate = Int(max(90, min(720, rate)))
     }
     
-    /// Adjusts playback volume (0.0 – 1.0). Note: `say` command doesn't support volume directly.
-    func setVolume(_ volume: Float) {
-        // The say command doesn't have a volume parameter
-        // Could use system volume but that affects everything
-    }
-    
     private func configureDefaultVoice() {
-        // Use system default voice (no selection)
         selectedVoiceName = nil
-        print("🔊 Using system default voice")
     }
 }
 

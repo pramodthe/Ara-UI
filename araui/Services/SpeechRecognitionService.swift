@@ -40,9 +40,7 @@ final class SpeechRecognitionService {
     }
 
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
-        print("🎤 [MIC DEBUG] Requesting speech recognition authorization...")
         SFSpeechRecognizer.requestAuthorization { status in
-            print("🎤 [MIC DEBUG] Authorization status: \(status.rawValue) (\(status == .authorized ? "✅ Authorized" : "❌ Not Authorized"))")
             DispatchQueue.main.async {
                 completion(status == .authorized)
             }
@@ -52,11 +50,9 @@ final class SpeechRecognitionService {
     func start() throws {
         guard isRunning == false else { return }
         guard let recognizer = recognizer, recognizer.isAvailable else {
-            print("❌ [MIC DEBUG] Speech recognizer unavailable")
             throw NSError(domain: "SpeechRecognitionService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Speech recognizer unavailable"])
         }
         isCancelling = false
-        print("✅ [MIC DEBUG] Speech recognizer available")
 
         #if os(iOS) || os(tvOS) || os(watchOS)
         let session = AVAudioSession.sharedInstance()
@@ -68,33 +64,25 @@ final class SpeechRecognitionService {
         request.shouldReportPartialResults = true
         // No strict on-device requirement per plan; system decides
         recognitionRequest = request
-        print("✅ [MIC DEBUG] Recognition request created")
 
-        // IMPORTANT: Set input device BEFORE creating recognition task
-        // This ensures the audio engine picks up the correct microphone
         #if os(macOS)
-        if let uid = preferredInputDeviceUID, setInputDeviceByUID(uid) {
-            print("🎤 [MIC DEBUG] Preferred input set via UID: \(uid)")
+        if let uid = preferredInputDeviceUID {
+            _ = setInputDeviceByUID(uid)
         } else {
             setBuiltInMicrophone()
         }
         
-        // Stop and recreate the audio engine to force it to use the new device
         if audioEngine.isRunning {
             audioEngine.stop()
         }
         audioEngine.reset()
         audioEngine = AVAudioEngine()
-        print("🎤 [MIC DEBUG] Audio engine RECREATED to pick up new default device")
-        // Give the system time to update the default input device
-        Thread.sleep(forTimeInterval: 0.15)
         #endif
 
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self = self else { return }
             if let result = result {
                 let text = result.bestTranscription.formattedString
-                print("🎤 [MIC DEBUG] Transcription: \(text) (isFinal: \(result.isFinal))")
                 if result.isFinal {
                     DispatchQueue.main.async {
                         self.delegate?.speechService(self, didFinishWith: text)
@@ -107,12 +95,9 @@ final class SpeechRecognitionService {
                 }
             } else if let error = error {
                 if self.isCancelling {
-                    // Ignore expected cancellation error triggered by user stop
-                    print("⚠️ [MIC DEBUG] Cancelling - ignoring error")
                     self.isCancelling = false
                     return
                 }
-                print("❌ [MIC DEBUG] Recognition error: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     self.delegate?.speechService(self, didFail: error)
                 }
@@ -122,90 +107,18 @@ final class SpeechRecognitionService {
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
-        
-        // Print detailed audio input information
-        print("🎤 [MIC DEBUG] =================================")
-        print("🎤 [MIC DEBUG] Audio Input Device Information:")
-        print("🎤 [MIC DEBUG] Sample Rate: \(format.sampleRate) Hz")
-        print("🎤 [MIC DEBUG] Channel Count: \(format.channelCount)")
-        print("🎤 [MIC DEBUG] Format: \(format)")
-        
-        #if os(macOS)
-        let inputDevice = audioEngine.inputNode.auAudioUnit.deviceID
-        print("🎤 [MIC DEBUG] Input Device ID: \(inputDevice)")
-        
-        // Get the name of the selected microphone using CoreAudio
-        let selectedMicName = getAudioDeviceName(deviceID: inputDevice)
-        print("🎤 [MIC DEBUG] 🎯 SELECTED MICROPHONE: \(selectedMicName)")
-        
-        // Get default input device
-        let defaultInputDevice = getDefaultInputDevice()
-        print("🎤 [MIC DEBUG] Default System Input Device ID: \(defaultInputDevice)")
-        let defaultMicName = getAudioDeviceName(deviceID: defaultInputDevice)
-        print("🎤 [MIC DEBUG] Default System Input Name: \(defaultMicName)")
-        
-        if inputDevice == defaultInputDevice {
-            print("🎤 [MIC DEBUG] ✅ Using system default microphone")
-        } else {
-            print("🎤 [MIC DEBUG] ⚠️ Using non-default microphone - ENGINE DID NOT PICK UP CHANGE!")
-            print("🎤 [MIC DEBUG] ❌ PROBLEM: Audio engine is using \(selectedMicName) instead of \(defaultMicName)")
-        }
-        
-        // Extra verification: Check if we're using the built-in mic
-        let selectedUID = getAudioDeviceUID(deviceID: inputDevice)
-        if selectedUID == "BuiltInMicrophoneDevice" || selectedMicName.contains("MacBook Pro Microphone") {
-            print("🎤 [MIC DEBUG] ✅✅✅ VERIFIED: Using MacBook Pro built-in microphone!")
-        } else {
-            print("🎤 [MIC DEBUG] ❌❌❌ ERROR: Still not using built-in microphone!")
-            print("🎤 [MIC DEBUG] Currently using: \(selectedMicName) (UID: \(selectedUID))")
-        }
-        
-        // Print available audio devices
-        let devices = AVCaptureDevice.devices(for: .audio)
-        print("🎤 [MIC DEBUG] All Available Audio Devices:")
-        for device in devices {
-            print("🎤 [MIC DEBUG]   - \(device.localizedName) (uniqueID: \(device.uniqueID))")
-        }
-        #endif
-        print("🎤 [MIC DEBUG] =================================")
-        
-        var bufferCount = 0
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, when in
-            bufferCount += 1
-            
-            // Calculate audio level from buffer
-            let channelData = buffer.floatChannelData?[0]
-            let frames = buffer.frameLength
-            var sum: Float = 0.0
-            if let data = channelData {
-                for i in 0..<Int(frames) {
-                    sum += abs(data[i])
-                }
-            }
-            let average = sum / Float(frames)
-            
-            // Print every 50th buffer to avoid spam
-            if bufferCount % 50 == 0 {
-                print("🎤 [MIC DEBUG] Buffer #\(bufferCount) - Avg Level: \(String(format: "%.4f", average)) - Time: \(when.sampleTime)")
-            }
-            
+
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
         }
-        
-        print("✅ [MIC DEBUG] Audio tap installed")
 
         audioEngine.prepare()
         try audioEngine.start()
-        print("✅ [MIC DEBUG] Audio engine started successfully")
         isRunning = true
     }
 
     func stop() {
-        guard isRunning else { 
-            print("⚠️ [MIC DEBUG] Stop called but not running")
-            return 
-        }
-        print("🛑 [MIC DEBUG] Stopping speech recognition...")
+        guard isRunning else { return }
         isCancelling = true
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
@@ -217,7 +130,6 @@ final class SpeechRecognitionService {
         do { try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) } catch {}
         #endif
         isRunning = false
-        print("✅ [MIC DEBUG] Speech recognition stopped")
     }
     
     #if os(macOS)
@@ -276,9 +188,6 @@ final class SpeechRecognitionService {
     }
     
     private func setBuiltInMicrophone() {
-        print("🎤 [MIC DEBUG] Attempting to set built-in MacBook Pro microphone...")
-        
-        // Get all available audio input devices
         var propertySize: UInt32 = 0
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
@@ -294,10 +203,7 @@ final class SpeechRecognitionService {
             &propertySize
         )
         
-        guard status == noErr else {
-            print("🎤 [MIC DEBUG] ❌ Failed to get devices size: \(status)")
-            return
-        }
+        guard status == noErr else { return }
         
         let deviceCount = Int(propertySize) / MemoryLayout<AudioDeviceID>.size
         var devices = [AudioDeviceID](repeating: 0, count: deviceCount)
@@ -311,40 +217,19 @@ final class SpeechRecognitionService {
             &devices
         )
         
-        guard status == noErr else {
-            print("🎤 [MIC DEBUG] ❌ Failed to get devices: \(status)")
-            return
-        }
+        guard status == noErr else { return }
         
-        print("🎤 [MIC DEBUG] Found \(deviceCount) audio devices, searching for built-in microphone...")
-        
-        // Search for the built-in microphone
         for deviceID in devices {
-            let deviceName = getAudioDeviceName(deviceID: deviceID)
+            guard isInputDevice(deviceID: deviceID) else { continue }
             let deviceUID = getAudioDeviceUID(deviceID: deviceID)
-            
-            print("🎤 [MIC DEBUG] Checking device: \(deviceName) (UID: \(deviceUID))")
-            
-            // Check if this is an input device
-            if !isInputDevice(deviceID: deviceID) {
-                print("🎤 [MIC DEBUG]   ↳ Skipping: Not an input device")
-                continue
-            }
-            
-            // Look for built-in microphone by UID or name
+            let deviceName = getAudioDeviceName(deviceID: deviceID)
             if deviceUID == "BuiltInMicrophoneDevice" || 
                deviceName.contains("MacBook Pro Microphone") ||
                deviceName.contains("Built-in Microphone") {
-                print("🎤 [MIC DEBUG] ✅ Found built-in microphone: \(deviceName)")
-                
-                // Set this as the default input device
                 setDefaultInputDevice(deviceID: deviceID)
-                print("🎤 [MIC DEBUG] ✅ Set \(deviceName) as default input")
                 return
             }
         }
-        
-        print("🎤 [MIC DEBUG] ⚠️ Built-in microphone not found, using system default")
     }
     
     private func getAudioDeviceUID(deviceID: AudioDeviceID) -> String {
@@ -431,7 +316,7 @@ final class SpeechRecognitionService {
         )
         
         if status != noErr {
-            print("🎤 [MIC DEBUG] ❌ Failed to set default input device: \(status)")
+            print("Failed to set default input device: \(status)")
         }
     }
     
@@ -455,7 +340,7 @@ final class SpeechRecognitionService {
         )
         
         if status != noErr {
-            print("🎤 [MIC DEBUG] ❌ Failed to get default input device: \(status)")
+            print("Failed to get default input device: \(status)")
         }
         
         return deviceID
@@ -481,7 +366,6 @@ final class SpeechRecognitionService {
         )
         
         if status != noErr {
-            print("🎤 [MIC DEBUG] ❌ Failed to get device name for ID \(deviceID): \(status)")
             return "Unknown Device (ID: \(deviceID))"
         }
         
