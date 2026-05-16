@@ -1,0 +1,48 @@
+{
+  "name": "terminal-mcp-server",
+  "version": "1.2.0",
+  "description": "A robust MCP server for executing commands locally and remotely via SSH with enhanced session management and error handling",
+  "keywords": ["mcp", "terminal", "ssh", "remote", "command-execution"],
+  "author": "AraUI Runtime",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "terminal-mcp-server": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+    "start": "node build/index.js",
+    "start:clean": "./run-clean.sh",
+    "test": "npm run build && npm run inspector",
+    "fix-shell": "./fix-shell.sh",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix"
+  },
+  "repository": {
+    "type": "git",
+    "url": "local-runtime"
+  },
+  "bugs": {
+    "url": "local-runtime"
+  },
+  "homepage": "local-runtime#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "ssh2": "^1.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/ssh2": "^1.15.4",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.3"
+  }
+}

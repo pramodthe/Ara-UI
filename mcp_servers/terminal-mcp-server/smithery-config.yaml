@@ -1,0 +1,34 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    properties:
+      debug:
+        type: boolean
+        default: false
+        description: Enable debug logging for troubleshooting.
+      sessionTimeout:
+        type: number
+        default: 1200000
+        description: Session timeout in milliseconds (default: 20 minutes).
+      maxRetries:
+        type: number
+        default: 3
+        description: Maximum number of SSH connection retry attempts.
+      connectionTimeout:
+        type: number
+        default: 30000
+        description: SSH connection timeout in milliseconds.
+    additionalProperties: false
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => { const args = []; if(config.debug) { process.env.DEBUG = 'true'; } return { command: 'node', args: ['build/index.js'] }; }
+  exampleConfig:
+    debug: false
+    sessionTimeout: 1200000
+    maxRetries: 3
+    connectionTimeout: 30000

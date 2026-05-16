@@ -1,0 +1,11 @@
+sSample Notes File
+==================
+
+This is a sample file in the workspace directory.
+The agent can read and modify this file using MCP filesystem tools.
+
+Test prompts:
+- "What's in the notes.txt file?"
+- "Add a note about today's weather"
+- "Create a new file called todo.txt"
+
