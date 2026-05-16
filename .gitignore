@@ -24,3 +24,4 @@ __pycache__/
 venv/
 
 ted_gemini/.adk/
+ted_gemini/app/Messages

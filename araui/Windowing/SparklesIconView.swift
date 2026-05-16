@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct SparklesIconView: View {
     let onClick: () -> Void
@@ -50,6 +51,7 @@ struct SparklesIconView: View {
 
 private struct ThinkingCloud: View {
     @State private var dotCount: Int = 0
+    private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     
     var body: some View {
         ZStack {
@@ -59,10 +61,8 @@ private struct ThinkingCloud: View {
             Text("💭")
                 .font(.system(size: 18))
         }
-        .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-                dotCount = (dotCount % 3) + 1
-            }
+        .onReceive(timer) { _ in
+            dotCount = (dotCount % 3) + 1
         }
     }
 }

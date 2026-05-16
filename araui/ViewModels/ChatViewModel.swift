@@ -51,8 +51,6 @@ final class ChatViewModel: ObservableObject {
 
         capturer.onCapture = { [weak self] text in
             guard let self else { return }
-            print("Captured context (\(text.count) chars)\n\(text)\n---")
-            // Replace any existing context with the most recent capture
             self.pendingContext = String(text.prefix(10000))
         }
 
@@ -65,11 +63,7 @@ final class ChatViewModel: ObservableObject {
             guard let self else { return }
             self.screenshot = image
             DispatchQueue.global(qos: .utility).async {
-                if let url = self.saveScreenshotToDisk(image: image) {
-                    print("Screenshot saved at: \(url.path)")
-                } else {
-                    print("Failed to save screenshot to disk")
-                }
+                _ = self.saveScreenshotToDisk(image: image)
             }
         }
         speech.delegate = self
@@ -81,12 +75,6 @@ final class ChatViewModel: ObservableObject {
         #endif
         
         loadSavedVoice()
-    }
-
-    func loadApiKeyExists() -> Bool {
-        // Gemini API key no longer required with backend integration.
-        // Keeping return value `true` preserves existing UI flows without prompting for a key.
-        return true
     }
 
     func clearChat() {
@@ -183,12 +171,9 @@ final class ChatViewModel: ObservableObject {
     }
 
     func toggleMic() {
-        print("🎤 [VIEWMODEL DEBUG] toggleMic called, isListening: \(isListening)")
         if isListening {
-            print("🎤 [VIEWMODEL DEBUG] Stopping listening...")
             stopListening(commitPartial: true, send: false)
         } else {
-            print("🎤 [VIEWMODEL DEBUG] Starting listening...")
             startListening()
         }
     }
@@ -284,27 +269,18 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func startListening() {
-        print("🎤 [VIEWMODEL DEBUG] startListening() called, requesting authorization...")
         speech.requestAuthorization { [weak self] granted in
-            guard let self else {
-                print("🎤 [VIEWMODEL DEBUG] ❌ Self is nil in authorization callback")
-                return
-            }
-            print("🎤 [VIEWMODEL DEBUG] Authorization callback received, granted: \(granted)")
+            guard let self else { return }
             Task { @MainActor in
                 if granted == false {
-                    print("🎤 [VIEWMODEL DEBUG] ❌ Authorization denied")
                     self.errorMessage = "Microphone/Speech permission required in System Settings."
                     return
                 }
-                print("🎤 [VIEWMODEL DEBUG] Authorization granted, starting speech service...")
                 do {
                     try self.speech.start()
-                    print("🎤 [VIEWMODEL DEBUG] ✅ Speech service started successfully")
                     self.isListening = true
                     ScreenGlowController.shared.showGlow()
                 } catch {
-                    print("🎤 [VIEWMODEL DEBUG] ❌ Failed to start speech service: \(error.localizedDescription)")
                     self.errorMessage = (error as NSError).localizedDescription
                 }
             }
@@ -341,13 +317,10 @@ final class ChatViewModel: ObservableObject {
     }
 
     func captureSelection() {
-        // Try last non-self app first (so switching back to AraUI doesn't clear context)
         if let text = capturer.captureSelectedTextFromLastAppOnce(), text.isEmpty == false {
             pendingContext = text
-            print("Selected context (\(text.count) chars)\n\(text)\n---")
         } else if let text = capturer.captureSelectedTextOnce(), text.isEmpty == false {
             pendingContext = text
-            print("Selected context (\(text.count) chars)\n\(text)\n---")
         } else {
             errorMessage = "No selected text found in the frontmost app."
         }
@@ -431,25 +404,20 @@ final class ChatViewModel: ObservableObject {
 // MARK: - SpeechRecognitionServiceDelegate
 extension ChatViewModel: SpeechRecognitionServiceDelegate {
     func speechService(_ svc: SpeechRecognitionService, didUpdatePartial text: String) {
-        print("🎤 [DELEGATE] didUpdatePartial: '\(text)'")
         partialTranscript = text
     }
 
     func speechService(_ svc: SpeechRecognitionService, didFinishWith text: String) {
-        print("🎤 [DELEGATE] didFinishWith: '\(text)'")
         isListening = false
         partialTranscript = nil
         withAnimation(.easeInOut(duration: 0.3)) {
             isHotkeyCaptureActive = false
         }
         ScreenGlowController.shared.hideGlow()
-        // Populate the input field with the final transcript instead of auto-sending
         input = text
-        print("🎤 [DELEGATE] Input field set to: '\(input)'")
     }
 
     func speechService(_ svc: SpeechRecognitionService, didFail error: Error) {
-        print("🎤 [DELEGATE] didFail: \(error.localizedDescription)")
         isListening = false
         partialTranscript = nil
         withAnimation(.easeInOut(duration: 0.3)) {
@@ -460,7 +428,6 @@ extension ChatViewModel: SpeechRecognitionServiceDelegate {
     }
 
     func speechServiceDidChangeState(_ svc: SpeechRecognitionService, isRunning: Bool) {
-        print("🎤 [DELEGATE] didChangeState: isRunning=\(isRunning)")
         isListening = isRunning
         if isRunning == false {
             withAnimation(.easeInOut(duration: 0.3)) {
