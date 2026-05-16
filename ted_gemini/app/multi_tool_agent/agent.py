@@ -27,18 +27,23 @@ TERMINAL_MCP_PATH = os.getenv(
     str(REPO_ROOT / "mcp_servers/terminal-mcp-server/build/index.js"),
 )
 
+APPLE_NOTES_MCP_PYTHON = os.getenv(
+    "APPLE_NOTES_MCP_PYTHON",
+    str(REPO_ROOT / "mcp_servers/mcp-apple-notes/.venv/bin/python"),
+)
+
 # Google Calendar OAuth credentials path
 GOOGLE_OAUTH_CREDENTIALS = os.getenv("GOOGLE_OAUTH_CREDENTIALS")
 
-TOKENROUTER_BASE_URL = os.getenv("TOKENROUTER_BASE_URL", "https://api.tokenrouter.io/v1")
-TOKENROUTER_MODEL = os.getenv("TOKENROUTER_MODEL", "auto:balance")
-TOKENROUTER_API_KEY = os.getenv("TOKENROUTER_API_KEY")
-LITELLM_MODEL = TOKENROUTER_MODEL if "/" in TOKENROUTER_MODEL else f"openai/{TOKENROUTER_MODEL}"
+DASHSCOPE_BASE_URL = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
+DASHSCOPE_CHAT_MODEL = os.getenv("DASHSCOPE_CHAT_MODEL", "qwen-plus")
+DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
+LITELLM_MODEL = f"openai/{DASHSCOPE_CHAT_MODEL}"
 
 llm_model = LiteLlm(
     model=LITELLM_MODEL,
-    api_base=TOKENROUTER_BASE_URL,
-    api_key=TOKENROUTER_API_KEY,
+    api_base=DASHSCOPE_BASE_URL,
+    api_key=DASHSCOPE_API_KEY,
     drop_params=True,
 )
 
@@ -124,13 +129,8 @@ root_agent = LlmAgent(
         MCPToolset(
             connection_params=StdioConnectionParams(
                 server_params=StdioServerParameters(
-                    command='uv',
-                    args=[
-                        'run',
-                        '--directory',
-                        str(REPO_ROOT / 'mcp_servers/mcp-apple-notes'),
-                        'mcp-apple-notes'
-                    ],
+                    command=APPLE_NOTES_MCP_PYTHON,
+                    args=["-m", "mcp_apple_notes.server"],
                 ),
                 timeout=60.0,  # Increase timeout to 60 seconds
             ),

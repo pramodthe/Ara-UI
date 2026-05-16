@@ -18,8 +18,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeyEventHandler: EventHandlerRef?
     private var hotKeyCallback: EventHandlerUPP?
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Ensure the floating icon exists and start according to settings (default collapsed)
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        migrateCollapsedStartupDefaultIfNeeded()
+
+        // Ensure the floating icon exists and start according to settings (default: window visible)
         Task { @MainActor in
             AppVisibilityController.shared.ensureIconWindow()
             // Defer to next runloop to allow SwiftUI to create the main window before changing state
@@ -93,6 +102,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             print("Failed to read hotkey event parameter: \(err)")
         }
+    }
+
+    /// One-time fix: earlier builds defaulted to hiding the main window on launch.
+    private func migrateCollapsedStartupDefaultIfNeeded() {
+        let migrationKey = "StartCollapsedDefaultFixed_v1"
+        guard UserDefaults.standard.bool(forKey: migrationKey) == false else { return }
+        UserDefaults.standard.set(false, forKey: "StartCollapsed")
+        UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

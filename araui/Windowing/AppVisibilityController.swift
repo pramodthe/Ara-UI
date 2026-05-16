@@ -103,7 +103,7 @@ final class AppVisibilityController {
 
     func startupRespectingSettings() {
         ensureIconWindow()
-        let shouldStartCollapsed = UserDefaults.standard.object(forKey: startCollapsedKey) as? Bool ?? true
+        let shouldStartCollapsed = UserDefaults.standard.object(forKey: startCollapsedKey) as? Bool ?? false
         if shouldStartCollapsed {
             startupCollapsed()
         } else {

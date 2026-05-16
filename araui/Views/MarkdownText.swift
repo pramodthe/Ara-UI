@@ -1,6 +1,6 @@
 //
 //  MarkdownText.swift
-//  nova
+//  araui
 //
 //  Renders basic Markdown safely in SwiftUI using AttributedString(markdown:).
 //

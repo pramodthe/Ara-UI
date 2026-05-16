@@ -1,8 +1,8 @@
 //
 //  KeychainService.swift
-//  nova
+//  araui
 //
-//  Simple wrapper for storing the Gemini API key in the keychain.
+//  Legacy keychain helper retained for older local builds.
 //
 
 import Foundation
@@ -75,4 +75,3 @@ final class KeychainService {
         }
     }
 }
-

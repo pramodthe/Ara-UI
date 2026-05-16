@@ -1,6 +1,6 @@
 //
 //  Message.swift
-//  nova
+//  araui
 //
 //  Defines chat message types used across the app.
 //

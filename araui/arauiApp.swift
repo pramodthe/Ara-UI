@@ -1,10 +1,10 @@
 //
-//  novaApp.swift
-//  nova
+//  arauiApp.swift
+//  araui
 import SwiftUI
 
 @main
-struct novaApp: App {
+struct arauiApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {

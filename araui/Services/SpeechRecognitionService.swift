@@ -1,6 +1,6 @@
 //
 //  SpeechRecognitionService.swift
-//  nova
+//  araui
 //
 //  Provides live microphone transcription via Apple's Speech framework.
 //

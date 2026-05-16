@@ -1,6 +1,6 @@
 //
 //  ChatInputTextView.swift
-//  nova
+//  araui
 //
 //  NSTextView wrapper to support Enter-to-send and Shift+Enter for newline.
 //

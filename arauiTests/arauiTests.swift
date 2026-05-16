@@ -1,10 +1,10 @@
 //
-//  novaTests.swift
-//  novaTests
+//  arauiTests.swift
+//  arauiTests
 import Testing
-@testable import nova
+@testable import araui
 
-struct novaTests {
+struct arauiTests {
 
     @Test func example() async throws {
         // Write your test here and use APIs like `#expect(...)` to check expected conditions.

@@ -1,6 +1,6 @@
 //
 //  ScreenSnippingService.swift
-//  nova
+//  araui
 //
 //  Screen snipping service to capture screen regions
 //

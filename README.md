@@ -10,8 +10,8 @@ AraUI is a native macOS AI assistant that can see your screen, hear your voice, 
 - Agent reads text from your frontmost window as context (via macOS Accessibility API)
 - Agent captures screenshots of your active window
 - Agent executes real tasks on your Mac — run terminal commands, send messages, manage notes, browse Safari, and more
-- Responses are spoken aloud via macOS TTS
-- Generate images from screen clips using Google Gemini
+- Responses are spoken aloud through Qwen3 TTS Flash
+- Generate images from screen clips using Qwen Image 2.0 Pro
 
 ---
 
@@ -29,7 +29,7 @@ AraUI is a native macOS AI assistant that can see your screen, hear your voice, 
 │          SpeechRecognitionService     localhost   │
 │          SpeechSynthesisService       :8000       │
 │          ScreenSnippingService                   │
-│          ImageGenerationService → Gemini API     │
+│          ImageGenerationService → BackendClient  │
 └──────────────────────────┬──────────────────────┘
                            │ HTTP (SSE)
                            ▼
@@ -37,7 +37,7 @@ AraUI is a native macOS AI assistant that can see your screen, hear your voice, 
 │         Python Backend — Google ADK             │
 │                                                  │
 │  LlmAgent (araui_assistant)                      │
-│    └─ LiteLlm → TokenRouter → LLM               │
+│    └─ LiteLlm → DashScope/Qwen Plus             │
 │                                                  │
 │  MCPToolset ──→ Terminal MCP Server (Node.js)    │
 │  MCPToolset ──→ Apple MCP Server (Bun/TS)        │
@@ -54,9 +54,9 @@ AraUI is a native macOS AI assistant that can see your screen, hear your voice, 
 | `BackendClient` | HTTP client; creates ADK session on launch, POSTs messages to `/run_sse`, parses SSE response |
 | `AccessibilityCaptureService` | Polls AX API every 2 s; captures frontmost window text (max 8 000 chars) and screenshots via ScreenCaptureKit |
 | `SpeechRecognitionService` | Apple Speech framework — streams partial + final transcripts |
-| `SpeechSynthesisService` | AVSpeechSynthesizer — speaks agent replies aloud |
+| `SpeechSynthesisService` | Plays Qwen3 TTS Flash audio returned by the backend |
 | `ScreenSnippingService` | CGEvent tap for ⌥C — runs `screencapture -i` for interactive snip |
-| `ImageGenerationService` | Calls `gemini-2.5-flash-image` directly with a screen clip; Gemini API key stored in Keychain |
+| `ImageGenerationService` | Sends screen clips to the local backend for Qwen Image 2.0 Pro generation/editing |
 | `AppVisibilityController` | Manages collapsed ↔ expanded state; persists floating icon position |
 | `FloatingIconPanel` | Borderless `NSPanel` at `.statusBar` level, visible across all Spaces |
 | `ScreenGlowController` | Ambient glow effect while the agent is processing or listening |
@@ -65,11 +65,11 @@ AraUI is a native macOS AI assistant that can see your screen, hear your voice, 
 
 Built on **Google ADK** (`google-adk[extensions]`). A single `LlmAgent` named `araui_assistant` runs in the `multi_tool_agent` app.
 
-**Model routing:**
+**Model provider:**
 ```
-LlmAgent → LiteLlm → TokenRouter (auto:balance) → actual LLM
+LlmAgent → LiteLlm → DashScope OpenAI-compatible API → qwen-plus
 ```
-TokenRouter dynamically selects the model (e.g. Claude, GPT-4o, Gemini) based on cost and availability. Override via `TOKENROUTER_MODEL` env var.
+DashScope is configured through LiteLLM with model string `openai/qwen-plus`. Override with `DASHSCOPE_CHAT_MODEL` if needed.
 
 **Request pipeline:**
 1. Swift app `POST /apps/multi_tool_agent/users/u/sessions/{id}` — creates session on launch
@@ -124,16 +124,18 @@ Python-based server that reads and writes Apple Notes via AppleScript. Supports 
 cd ted_gemini
 pip install -r requirements.txt
 cp ../.env.example ../.env   # fill in your keys
-adk web                      # starts at http://localhost:8000
+uvicorn server:app --host 127.0.0.1 --port 8000
 ```
 
 **`.env` variables:**
 
 | Variable | Required | Description |
 |---|---|---|
-| `TOKENROUTER_API_KEY` | Yes | TokenRouter API key |
-| `TOKENROUTER_BASE_URL` | No | Defaults to `https://api.tokenrouter.com/v1` |
-| `TOKENROUTER_MODEL` | No | Defaults to `auto:balance` |
+| `DASHSCOPE_API_KEY` | Yes | DashScope API key for Qwen models |
+| `DASHSCOPE_BASE_URL` | No | Defaults to `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` |
+| `DASHSCOPE_CHAT_MODEL` | No | Defaults to `qwen-plus` |
+| `DASHSCOPE_IMAGE_MODEL` | No | Defaults to `qwen-image-2.0-pro` |
+| `DASHSCOPE_TTS_MODEL` | No | Defaults to `qwen3-tts-flash` |
 | `GOOGLE_OAUTH_CREDENTIALS` | No | Path to OAuth JSON (Google Calendar — currently disabled) |
 
 ### 2. MCP Servers
@@ -160,9 +162,9 @@ Open `araui.xcodeproj` in Xcode and run. On first launch, macOS will prompt for:
 - **Speech Recognition** — required for voice transcription
 - **Screen Recording** — required for window screenshots
 
-### 4. Image Generation (optional)
+### 4. AI Providers
 
-Open **Settings** (⌘,) and paste your Google Gemini API key. It is stored in macOS Keychain and used only for image generation requests.
+Chat, image generation, and voice output are handled by the local backend using DashScope/Qwen. Keep `DASHSCOPE_API_KEY` in `.env`; the Swift app does not store the DashScope key in macOS Keychain. Voice input remains Apple Speech Recognition.
 
 ---
 
@@ -172,7 +174,7 @@ Open **Settings** (⌘,) and paste your Google Gemini API key. It is stored in m
 |---|---|
 | macOS frontend | Swift, SwiftUI, AppKit |
 | AI agent framework | Google ADK (`google-adk[extensions]`) |
-| LLM routing | LiteLLM + TokenRouter |
+| LLM provider | LiteLLM + DashScope/Qwen Plus |
 | Tool protocol | Model Context Protocol (MCP) |
 | Terminal tools | Node.js / TypeScript |
 | Apple app tools | Bun / TypeScript + AppleScript |
@@ -180,6 +182,6 @@ Open **Settings** (⌘,) and paste your Google Gemini API key. It is stored in m
 | Screen capture | ScreenCaptureKit (macOS 12.3+) |
 | Accessibility | macOS Accessibility API (AXUIElement) |
 | Voice input | Apple Speech framework |
-| Voice output | AVSpeechSynthesizer |
-| Image generation | Google Gemini API (`gemini-2.5-flash-image`) |
-| Secret storage | macOS Keychain |
+| Voice output | Qwen3 TTS Flash + AVAudioPlayer |
+| Image generation | Qwen Image 2.0 Pro |
+| Secret storage | `.env` loaded by the backend |

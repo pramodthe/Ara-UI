@@ -8,20 +8,22 @@ AraUI is a two-component macOS AI assistant:
 1. **Swift macOS app** (`araui/`) — SwiftUI + AppKit frontend with a floating icon, chat window, voice input/output, and screen capture
 2. **Python ADK backend** (`ted_gemini/`) — Google ADK agent running locally at `http://localhost:8000` that executes tasks via MCP tool servers
 
-The Swift app communicates exclusively with the local Python backend for chat. Gemini API is only used directly for image generation.
+The Swift app communicates exclusively with the local Python backend for chat, image generation/editing, and voice output. Voice input stays local through Apple Speech Recognition.
 
 ## Running the Backend
 
 ```bash
 cd ted_gemini
 pip install -r requirements.txt    # google-adk[extensions], certifi
-adk web                            # starts server at http://localhost:8000
+uvicorn server:app --host 127.0.0.1 --port 8000
 ```
 
 Environment variables required in `.env` (at repo root):
-- `TOKENROUTER_API_KEY` — key for TokenRouter (routes to LLMs)
-- `TOKENROUTER_BASE_URL` — defaults to `https://api.tokenrouter.com/v1`
-- `TOKENROUTER_MODEL` — defaults to `auto:balance`
+- `DASHSCOPE_API_KEY` — DashScope key for Qwen models
+- `DASHSCOPE_BASE_URL` — defaults to `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
+- `DASHSCOPE_CHAT_MODEL` — defaults to `qwen-plus`
+- `DASHSCOPE_IMAGE_MODEL` — defaults to `qwen-image-2.0-pro`
+- `DASHSCOPE_TTS_MODEL` — defaults to `qwen3-tts-flash`
 - `GOOGLE_OAUTH_CREDENTIALS` — path to OAuth JSON (for Google Calendar, currently disabled)
 
 ## Running the Swift App
@@ -76,12 +78,14 @@ Paths can be overridden via env vars: `TERMINAL_MCP_PATH`, `APPLE_NOTES_MCP_PYTH
 - `⌘⌥M` — toggle window visibility
 - `⌥C` — screen snip (via `CGEvent.tapCreate`)
 
-**Image generation** — Separate from chat. Uses Gemini API directly (`gemini-2.5-flash-image`) with key stored in Keychain (`com.araui.gemini` / `apiKey`). Triggered from the `ImageGenerationView` popover (wand button in header). Input image comes from `~/Documents/AraUI/clip.png` saved by `ScreenSnippingService`.
+**Image generation** — Separate from chat in the Swift UI, but it uses the same local backend. `ImageGenerationService` sends the screen clip and prompt to `POST /araui/image-generation`, which calls DashScope `qwen-image-2.0-pro`. Input image comes from `~/Documents/AraUI/clip.png` saved by `ScreenSnippingService`.
+
+**Voice output** — `SpeechSynthesisService` sends assistant replies to `POST /araui/tts`, receives Qwen3 TTS Flash audio, and plays it with `AVAudioPlayer`. Apple Speech Recognition still handles microphone transcription.
 
 ### Python Backend
 
 `ted_gemini/app/multi_tool_agent/agent.py` defines a single `root_agent` (`LlmAgent`) using:
-- **Model**: `LiteLlm` wrapping TokenRouter (`auto:balance` by default — TokenRouter selects the actual LLM)
+- **Model**: `LiteLlm(model="openai/qwen-plus")` against the DashScope OpenAI-compatible endpoint
 - **Tools**: Three `MCPToolset` instances connected via stdio to the MCP servers above
 
 The agent name is `araui_assistant`; app name for ADK routing is `multi_tool_agent`.

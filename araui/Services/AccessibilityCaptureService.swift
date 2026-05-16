@@ -1,6 +1,6 @@
 //
 //  AccessibilityCaptureService.swift
-//  nova
+//  araui
 //
 //  Continuously captures accessible text from the frontmost app window.
 //

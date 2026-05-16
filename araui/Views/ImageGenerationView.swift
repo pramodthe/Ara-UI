@@ -1,6 +1,6 @@
 //
 //  ImageGenerationView.swift
-//  nova
+//  araui
 //
 //  View for generating images from screen clips
 //

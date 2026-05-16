@@ -1,9 +1,9 @@
 //
-//  novaUITestsLaunchTests.swift
-//  novaUITests
+//  arauiUITestsLaunchTests.swift
+//  arauiUITests
 import XCTest
 
-final class novaUITestsLaunchTests: XCTestCase {
+final class arauiUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

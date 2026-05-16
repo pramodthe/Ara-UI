@@ -1,6 +1,6 @@
 //
 //  ChatViewModel.swift
-//  nova
+//  araui
 //
 //  Orchestrates chat state and streaming.
 //
@@ -146,7 +146,6 @@ final class ChatViewModel: ObservableObject {
                 screenshot = nil
             }
 
-            // Previously streamed via Gemini; now use backend single-response flow.
             let reply = try await client.sendMessage(
                 text: userMessage.text,
                 inlineImageData: imageData,
@@ -439,4 +438,3 @@ extension ChatViewModel: SpeechRecognitionServiceDelegate {
         }
     }
 }
-

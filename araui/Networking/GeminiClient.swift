@@ -1,6 +1,6 @@
 //
 //  BackendClient.swift
-//  nova
+//  araui
 //
 //  Non-streaming client for the custom AraUI backend.
 //
@@ -19,12 +19,21 @@ private struct BackendResponse: Decodable {
     var text: String { content.parts.compactMap { $0.text }.joined() }
 }
 
+private struct BackendErrorResponse: Decodable {
+    let error: String?
+    let detail: String?
+
+    var message: String? {
+        error ?? detail
+    }
+}
+
 final class BackendClient {
     private static let baseURL = URL(string: "http://localhost:8000")!
     private static let appName = "multi_tool_agent"
     private static let userId = "u"
     private static var sessionId: String = UUID().uuidString
-    private static let sessionQueue = DispatchQueue(label: "nova.backendclient.session")
+    private static let sessionQueue = DispatchQueue(label: "araui.backendclient.session")
     private static var sessionTask: Task<Void, Error>?
 
     private let decoder = JSONDecoder()
@@ -69,13 +78,14 @@ final class BackendClient {
         request.httpBody = try JSONEncoder().encode(payload)
         request.timeoutInterval = 60
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { return }
         switch http.statusCode {
         case 200..<300, 409:
             return
         default:
-            throw NSError(domain: "BackendClient", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Failed to create session (status: \(http.statusCode))"])
+            let message = Self.backendErrorMessage(from: data) ?? "Failed to create session (status: \(http.statusCode))"
+            throw NSError(domain: "BackendClient", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message])
         }
     }
 
@@ -127,7 +137,9 @@ final class BackendClient {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw NSError(domain: "BackendClient", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "Server error"])
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let message = BackendClient.backendErrorMessage(from: data) ?? "Server error (status: \(statusCode))"
+            throw NSError(domain: "BackendClient", code: statusCode, userInfo: [NSLocalizedDescriptionKey: message])
         }
 
         let rawString = String(data: data, encoding: .utf8) ?? ""
@@ -137,6 +149,12 @@ final class BackendClient {
 
         for payload in payloads {
             guard let payloadData = payload.data(using: .utf8) else { continue }
+            if let backendError = try? decoder.decode(BackendErrorResponse.self, from: payloadData),
+               let message = backendError.message,
+               message.isEmpty == false {
+                throw NSError(domain: "BackendClient", code: -3, userInfo: [NSLocalizedDescriptionKey: message])
+            }
+
             do {
                 let response = try decoder.decode(BackendResponse.self, from: payloadData)
                 let text = response.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
@@ -158,9 +176,87 @@ final class BackendClient {
 
         throw NSError(domain: "BackendClient", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid response encoding"])
     }
+
+    func generateImage(fromImageData imageData: Data, mimeType: String, prompt: String) async throws -> Data {
+        struct Payload: Encodable {
+            let prompt: String
+            let imageData: String
+            let mimeType: String
+
+            enum CodingKeys: String, CodingKey {
+                case prompt
+                case imageData = "image_data"
+                case mimeType = "mime_type"
+            }
+        }
+
+        let payload = Payload(
+            prompt: prompt,
+            imageData: imageData.base64EncodedString(),
+            mimeType: mimeType
+        )
+
+        return try await postBinary(
+            path: "araui/image-generation",
+            body: payload,
+            timeout: 180,
+            fallbackError: "Image generation failed"
+        )
+    }
+
+    func synthesizeSpeech(text: String, voice: String = "Cherry") async throws -> Data {
+        struct Payload: Encodable {
+            let text: String
+            let voice: String
+            let languageType: String
+
+            enum CodingKeys: String, CodingKey {
+                case text
+                case voice
+                case languageType = "language_type"
+            }
+        }
+
+        let payload = Payload(text: text, voice: voice, languageType: "English")
+        return try await postBinary(
+            path: "araui/tts",
+            body: payload,
+            timeout: 120,
+            fallbackError: "Text-to-speech failed"
+        )
+    }
 }
 
 private extension BackendClient {
+    func postBinary<T: Encodable>(path: String, body: T, timeout: TimeInterval, fallbackError: String) async throws -> Data {
+        var request = URLRequest(url: BackendClient.baseURL.appendingPathComponent(path))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = timeout
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let message = BackendClient.backendErrorMessage(from: data) ?? "\(fallbackError) (status: \(statusCode))"
+            throw NSError(domain: "BackendClient", code: statusCode, userInfo: [NSLocalizedDescriptionKey: message])
+        }
+
+        return data
+    }
+
+    static func backendErrorMessage(from data: Data) -> String? {
+        if let decoded = try? JSONDecoder().decode(BackendErrorResponse.self, from: data),
+           let message = decoded.message,
+           message.isEmpty == false {
+            return message
+        }
+
+        let raw = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        return raw?.isEmpty == false ? raw : nil
+    }
+
     func extractPayloads(from raw: String) -> [String] {
         var payloads: [String] = []
         var buffer = ""
@@ -205,4 +301,3 @@ private extension BackendClient {
         return payloads
     }
 }
-
