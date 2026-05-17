@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import base64
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
 import requests
+
+logger = logging.getLogger(__name__)
 from fastapi import HTTPException
 from fastapi.responses import Response
 from google.adk.cli.fast_api import get_fast_api_app
@@ -173,10 +176,15 @@ def synthesize_speech(request: TextToSpeechRequest) -> Response:
     if not text:
         raise HTTPException(status_code=400, detail="Text is required")
 
+    max_chars = 600
+    if len(text) > max_chars:
+        logger.warning("TTS text truncated from %d to %d characters", len(text), max_chars)
+        text = text[:max_chars]
+
     payload = {
         "model": os.getenv("DASHSCOPE_TTS_MODEL", "qwen3-tts-flash"),
         "input": {
-            "text": text[:600],
+            "text": text,
             "voice": request.voice,
             "language_type": request.language_type,
         },
