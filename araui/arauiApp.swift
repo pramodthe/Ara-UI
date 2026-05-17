@@ -36,7 +36,6 @@ struct arauiApp: App {
 
         Settings {
             SettingsView()
-                .environmentObject(appDelegate.sharedViewModel)
         }
     }
 }

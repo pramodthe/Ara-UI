@@ -271,18 +271,6 @@ private struct ErrorBanner: View {
     }
 }
 
-private struct EmptyState: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Welcome to AraUI")
-                .font(.title3.weight(.semibold))
-            Text("Chat, image generation, and voice output use the local AraUI backend powered by DashScope/Qwen.")
-                .foregroundStyle(.secondary)
-        }
-        .padding(.bottom, 12)
-    }
-}
-
 private struct SpeechCaptureOverlay: View {
     let isVisible: Bool
     let partialText: String?

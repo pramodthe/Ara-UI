@@ -17,21 +17,7 @@ final class SpeechSynthesisService: NSObject, AVAudioPlayerDelegate {
     private var audioPlayer: AVAudioPlayer?
     private var playbackTask: Task<Void, Never>?
     private var playbackID = UUID()
-    private var selectedVoiceName: String = "Cherry"
-
-    func getAvailableVoices() -> [(identifier: String, displayName: String, quality: String)] {
-        [
-            ("Cherry", "Qwen3 TTS Flash - Cherry", "Qwen")
-        ]
-    }
-
-    func getCurrentVoiceIdentifier() -> String? {
-        selectedVoiceName
-    }
-
-    func getCurrentVoiceName() -> String? {
-        selectedVoiceName
-    }
+    private let voiceName = "Cherry"
 
     func speak(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -43,7 +29,7 @@ final class SpeechSynthesisService: NSObject, AVAudioPlayerDelegate {
         stop()
         let requestID = UUID()
         playbackID = requestID
-        let voice = selectedVoiceName
+        let voice = voiceName
 
         playbackTask = Task { [weak self] in
             guard let self else { return }
@@ -102,14 +88,6 @@ final class SpeechSynthesisService: NSObject, AVAudioPlayerDelegate {
         onSpeakingStateChanged?(false)
     }
 
-    func setVoice(_ voiceName: String?) {
-        selectedVoiceName = voiceName?.isEmpty == false ? voiceName! : "Cherry"
-    }
-
-    func setRate(_ rate: Float) {
-        // Qwen TTS playback rate is controlled by the generated audio, not AVAudioPlayer.
-    }
-
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         DispatchQueue.main.async { [weak self] in
             guard self?.audioPlayer === player else { return }
@@ -129,3 +107,5 @@ final class SpeechSynthesisService: NSObject, AVAudioPlayerDelegate {
         }
     }
 }
+
+

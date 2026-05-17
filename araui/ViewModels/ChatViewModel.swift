@@ -79,7 +79,6 @@ final class ChatViewModel: ObservableObject {
         refreshInputDevices()
         #endif
         
-        loadSavedVoice()
     }
 
     func clearChat() {
@@ -348,30 +347,6 @@ final class ChatViewModel: ObservableObject {
         pendingContext = nil
     }
     
-    // MARK: - Voice Selection
-    func getAvailableVoices() -> [(identifier: String, displayName: String, quality: String)] {
-        return speechSynthesizer.getAvailableVoices()
-    }
-    
-    func getCurrentVoiceIdentifier() -> String? {
-        return speechSynthesizer.getCurrentVoiceIdentifier()
-    }
-    
-    func setVoice(_ identifier: String?) {
-        speechSynthesizer.setVoice(identifier)
-        if let id = identifier {
-            UserDefaults.standard.set(id, forKey: "SelectedVoiceIdentifier")
-        } else {
-            UserDefaults.standard.removeObject(forKey: "SelectedVoiceIdentifier")
-        }
-    }
-    
-    func loadSavedVoice() {
-        if let savedIdentifier = UserDefaults.standard.string(forKey: "SelectedVoiceIdentifier") {
-            speechSynthesizer.setVoice(savedIdentifier)
-        }
-    }
-
     // MARK: - Screenshot saving
     private func saveScreenshotToDisk(image: NSImage) -> URL? {
         guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
@@ -467,3 +442,4 @@ extension ChatViewModel: SpeechRecognitionServiceDelegate {
         }
     }
 }
+
