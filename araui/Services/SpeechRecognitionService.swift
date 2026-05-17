@@ -40,12 +40,39 @@ final class SpeechRecognitionService {
     }
 
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
+        #if os(macOS)
+        requestMicrophoneAccess { micGranted in
+            guard micGranted else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+            SFSpeechRecognizer.requestAuthorization { status in
+                DispatchQueue.main.async {
+                    completion(status == .authorized)
+                }
+            }
+        }
+        #else
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
                 completion(status == .authorized)
             }
         }
+        #endif
     }
+
+    #if os(macOS)
+    private func requestMicrophoneAccess(completion: @escaping (Bool) -> Void) {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            completion(true)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio, completionHandler: completion)
+        default:
+            completion(false)
+        }
+    }
+    #endif
 
     func start() throws {
         guard isRunning == false else { return }

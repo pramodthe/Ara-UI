@@ -60,13 +60,13 @@ final class AccessibilityCaptureService {
     }
 
     private func isTrustedOrPrompt(promptIfNeeded: Bool = true) -> Bool {
-        let options: CFDictionary
         if promptIfNeeded {
-            options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        } else {
-            options = [:] as CFDictionary
+            let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+            let options = [key: true] as CFDictionary
+            return AXIsProcessTrustedWithOptions(options)
         }
-        return AXIsProcessTrustedWithOptions(options)
+        // Empty CFDictionary crashes AXIsProcessTrustedWithOptions; use the no-options API.
+        return AXIsProcessTrusted()
     }
 
     private func captureFrontmostWindowText() -> String? {
@@ -223,33 +223,42 @@ extension AccessibilityCaptureService {
     }
 
     func captureFrontmostSnapshot() async throws -> Snapshot {
-        guard isTrustedOrPrompt(promptIfNeeded: false) else {
-            throw SnapshotError.permissionDenied
-        }
-
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-            return Snapshot(contextText: nil, screenshot: nil, app: nil)
-        }
-
-        let myBundle = Bundle.main.bundleIdentifier
-        let isSelf = (myBundle != nil && frontApp.bundleIdentifier == myBundle)
-
-        let context = captureFrontmostWindowText()
-
-        let appSnapshot: RecognizedApp?
-        if isSelf {
-            appSnapshot = lastNonSelfAppSnapshot
-        } else {
-            let name = frontApp.localizedName ?? (frontApp.bundleIdentifier ?? String(frontApp.processIdentifier))
-            var icon: NSImage? = nil
-            if let url = frontApp.bundleURL {
-                icon = NSWorkspace.shared.icon(forFile: url.path)
+        let prepared = try await MainActor.run { () throws -> (context: String?, app: RecognizedApp?, pid: pid_t?) in
+            guard isTrustedOrPrompt(promptIfNeeded: false) else {
+                throw SnapshotError.permissionDenied
             }
-            appSnapshot = RecognizedApp(name: name, icon: icon)
+
+            guard let frontApp = NSWorkspace.shared.frontmostApplication else {
+                return (nil, nil, nil)
+            }
+
+            let myBundle = Bundle.main.bundleIdentifier
+            let isSelf = (myBundle != nil && frontApp.bundleIdentifier == myBundle)
+            let context = captureFrontmostWindowText()
+
+            let appSnapshot: RecognizedApp?
+            if isSelf {
+                appSnapshot = lastNonSelfAppSnapshot
+            } else {
+                let name = frontApp.localizedName ?? (frontApp.bundleIdentifier ?? String(frontApp.processIdentifier))
+                var icon: NSImage? = nil
+                if let url = frontApp.bundleURL {
+                    icon = NSWorkspace.shared.icon(forFile: url.path)
+                }
+                appSnapshot = RecognizedApp(name: name, icon: icon)
+            }
+
+            return (context, appSnapshot, frontApp.processIdentifier)
         }
 
-        let screenshot = await captureFrontmostScreenshot(pid: frontApp.processIdentifier)
-        return Snapshot(contextText: context, screenshot: screenshot, app: appSnapshot)
+        let screenshot: NSImage?
+        if let pid = prepared.pid {
+            screenshot = await captureFrontmostScreenshot(pid: pid)
+        } else {
+            screenshot = nil
+        }
+
+        return Snapshot(contextText: prepared.context, screenshot: screenshot, app: prepared.app)
     }
 
     private func captureFrontmostScreenshot(pid: pid_t) async -> NSImage? {

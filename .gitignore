@@ -17,6 +17,8 @@ node_modules/
 *.dSYM
 *.xcarchive
 
+*.profraw
+
 __pycache__/
 *.py[cod]
 .pytest_cache/

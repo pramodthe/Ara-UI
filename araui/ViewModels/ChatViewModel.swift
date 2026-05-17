@@ -48,6 +48,11 @@ final class ChatViewModel: ObservableObject {
                 self?.isSpeaking = isSpeaking
             }
         }
+        speechSynthesizer.onError = { [weak self] message in
+            Task { @MainActor in
+                self?.errorMessage = "Voice output failed: \(message). Is the backend running at http://localhost:8000?"
+            }
+        }
 
         capturer.onCapture = { [weak self] text in
             guard let self else { return }
@@ -182,14 +187,24 @@ final class ChatViewModel: ObservableObject {
             if isListening {
                 stopListening(commitPartial: true, send: true)
             } else {
+                let pending = pendingTranscriptText()
                 withAnimation(.easeInOut(duration: 0.3)) {
                     isHotkeyCaptureActive = false
                 }
                 ScreenGlowController.shared.hideGlow()
+                if pending.isEmpty == false {
+                    Task { await sendTranscribedText(pending) }
+                }
             }
         } else {
             startHotkeyCapture()
         }
+    }
+
+    private func pendingTranscriptText() -> String {
+        let partial = partialTranscript?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if partial.isEmpty == false { return partial }
+        return input.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func startHotkeyCapture() {
@@ -259,6 +274,10 @@ final class ChatViewModel: ObservableObject {
                 if let app = snapshot.app {
                     recognizedApp = app
                 }
+            }
+        } catch AccessibilityCaptureService.SnapshotError.permissionDenied {
+            await MainActor.run {
+                self.errorMessage = "Accessibility permission required. Enable AraUI in System Settings → Privacy & Security → Accessibility."
             }
         } catch {
             await MainActor.run {
@@ -407,13 +426,23 @@ extension ChatViewModel: SpeechRecognitionServiceDelegate {
     }
 
     func speechService(_ svc: SpeechRecognitionService, didFinishWith text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldAutoSend = isHotkeyCaptureActive
+
         isListening = false
         partialTranscript = nil
         withAnimation(.easeInOut(duration: 0.3)) {
             isHotkeyCaptureActive = false
         }
         ScreenGlowController.shared.hideGlow()
-        input = text
+
+        guard trimmed.isEmpty == false else { return }
+
+        if shouldAutoSend {
+            Task { await sendTranscribedText(trimmed) }
+        } else {
+            input = trimmed
+        }
     }
 
     func speechService(_ svc: SpeechRecognitionService, didFail error: Error) {

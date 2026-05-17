@@ -11,6 +11,7 @@ import Foundation
 /// Text-to-speech wrapper for DashScope Qwen3 TTS Flash audio returned by the backend.
 final class SpeechSynthesisService: NSObject, AVAudioPlayerDelegate {
     var onSpeakingStateChanged: ((Bool) -> Void)?
+    var onError: ((String) -> Void)?
 
     private let client = BackendClient()
     private var audioPlayer: AVAudioPlayer?
@@ -67,9 +68,11 @@ final class SpeechSynthesisService: NSObject, AVAudioPlayerDelegate {
                             self.onSpeakingStateChanged?(false)
                         }
                     } catch {
-                        print("Failed to play Qwen TTS audio: \(error)")
+                        let message = (error as NSError).localizedDescription
+                        print("Failed to play Qwen TTS audio: \(message)")
                         self.audioPlayer = nil
                         self.onSpeakingStateChanged?(false)
+                        self.onError?(message)
                     }
                 }
             } catch is CancellationError {
@@ -77,9 +80,11 @@ final class SpeechSynthesisService: NSObject, AVAudioPlayerDelegate {
             } catch {
                 await MainActor.run {
                     guard self.playbackID == requestID else { return }
-                    print("Failed to synthesize Qwen TTS audio: \(error)")
+                    let message = (error as NSError).localizedDescription
+                    print("Failed to synthesize Qwen TTS audio: \(message)")
                     self.audioPlayer = nil
                     self.onSpeakingStateChanged?(false)
+                    self.onError?(message)
                 }
             }
         }

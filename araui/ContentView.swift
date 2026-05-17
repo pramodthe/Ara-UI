@@ -351,7 +351,7 @@ private struct SpeechCaptureOverlay: View {
                         .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(2)
                 } else {
-                    Text("Speak now, AraUI is capturing context")
+                    Text("Speak now — release or press ⌥X again to send")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.7))
                 }
